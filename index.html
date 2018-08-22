@@ -1,0 +1,201 @@
+﻿<html>
+<head>
+    <title>Command Test</title>
+    <link href="https://cdn.bootcss.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.bootcss.com/jquery/1.9.1/jquery.min.js"></script>
+    <script src="https://cdn.bootcss.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+    <style>
+        html, body{
+            margin: 0;
+            padding: 0;
+            font-size: 12px;
+            width: 100%;
+            height: 100%;
+            color: #333333;
+        }
+        #header{
+            width: 60%;
+            height: auto;
+            float: left;
+            padding: 5px 50px;
+        }
+        #send-box{
+            width: 30%;
+            height: auto;
+            float: left;
+            padding: 5px 50px;
+        }
+        #main{
+            width: 100%;
+            height: auto;
+            background: #f5f5f5;
+            padding: 5px 50px;
+            float: left;
+        }
+    </style>
+</head>
+<body>
+<div id="header">
+    <div id="head-select-box" class="input-group">
+        <span id="upFilePath" type="text" onclick="document.getElementById('chooseFile').click()" class="form-control">Please select a file...</span>
+        <span class="input-group-btn">
+                    <button onclick="document.getElementById('chooseFile').click()" type="button" class="btn btn-default">
+                        <span class="glyphicon glyphicon-folder-open"> </span> Select File
+                    </button>
+                    <input style="display:none" type="file" name="upFile" id="chooseFile" onchange="setFilePath(this.value)">
+                    <button id="importConfirm" type="button" class="btn btn-info">
+                       <span class="glyphicon glyphicon-cloud-upload"></span> Submit
+                    </button>
+                </span>
+    </div>
+</div>
+<div id="send-box" class="form-inline">s
+    <input type="TEXT" class="form-control" id="cmd-str" value="88888888" />
+    <input type="TEXT" class="form-control" id="cmd-date" value="" />
+    <button id="btn-send" type="button" class="btn btn-danger">发 送</button>
+</div>
+<div id="main">
+
+</div>
+
+<script>
+function setFilePath(val){if(val.indexOf('\\')>0){var arr=val.split("\\");val=arr[arr.length-1]}document.getElementById('upFilePath').innerHTML=val}
+
+var base = [];
+var sendIndex = 0;
+$(function(){
+    $('#importConfirm').unbind().on('click',function(){
+        var file=document.getElementById('chooseFile').files[0];
+        if(file==null){
+            alert('Please select a file!');return;
+        }
+        //原读text
+        var reader=new FileReader();
+//         reader.readAsText(file);
+        // reader.readAsArrayBuffer(file);
+        reader.readAsDataURL(file);
+//        reader.readAsBinaryString(file);
+        reader.onload=function(f){
+            var res=this.result.trim();
+            console.log(res);
+//            if(res == null || res == ""){
+//                alert("Null");return;
+//            }
+//            format(res);
+        };
+
+
+
+//        读语音文件
+//        reader.readAsBinaryString(file)
+//        reader.onloadend = function (e) {
+//            var res=this.result.trim();
+//            if(res == null || res == ""){
+//                alert("Null");return;
+//            }
+//            console.log(res.length);
+//            formatByPCM(res);
+//        };
+
+        function format(res){
+            alert("上传成功");
+            if(res.indexOf(",") > -1){
+                base = res.split(",");
+            }else{
+                base = [];
+                base.push(res);
+            }
+        }
+
+    });
+    //=======================
+    $('#btn-send').unbind().on('click',function(){
+        if(base.length == 0){
+            alert("Null"); return;
+        }
+        sendIndex = 0;
+        sendCommandByDevice();
+    });
+
+    function sendCommandByDevice(){
+        console.log("SendIndex: " + sendIndex);
+        var timer = 5000;
+        var number = base[sendIndex].trim();
+        if(number.length != 16){
+            $('#main').push(number + ": 编码错误");
+        }else{
+            if($('#cmd-date').val() == ""){
+                sending(number + ": 无需验证日期", number);
+                timer = 2000;
+            }else{
+                getLog(number);
+            }
+        }
+        sendIndex++;
+        if(sendIndex < base.length){
+            setTimeout(function(){
+                sendCommandByDevice();
+            }, timer);
+        }else{
+            alert('发送结束！');
+        }
+    }
+
+    function getLog(number){
+        var res = "";
+        $.ajax({
+            type: 'post',
+            url: './device/logger',
+            data: {'param': number},
+            cache: true,
+            async: true,
+            dataType: 'text',
+            error: function(XMLHttpRequest, textStatus, errorThrown){
+                console.log(XMLHttpRequest.responseText);
+                $('#main').append('日志错误:' + number +' ： '+XMLHttpRequest.responseText);
+            },
+            success: function(response){
+                if(response.indexOf("2018-07") > -1){
+                    res = number + ": 日期合格";
+                    sending(res, number);
+                }else{
+                    res = number + ": 日期不合格<br>";
+                    $('#main').append(res);
+                }
+            }
+        });
+    }
+
+    function sending(res, number){
+        var cmd = $('#cmd-str').val().trim();
+        if(cmd == "" || cmd.length < 2){
+            $('#main').append("指令错误: " + number); return;
+        }
+        var param={"Target":number,"From":"Closed Beta","Commands":cmd};
+        $.ajax({
+            type: 'post',
+            url: './device/cmd',
+            data: {'param':JSON.stringify(param)},
+            cache: true,
+            async: true,
+            dataType: 'json',
+            error: function(XMLHttpRequest, textStatus, errorThrown){
+                console.log(XMLHttpRequest.responseText);
+                $('#main').append('发送错误:' + number +' ： '+XMLHttpRequest.responseText);
+            },
+            success: function(response){
+                if(response.Code > 0){
+                    res += ",发送成功<br>";
+                }else{
+                    res += ",发送失败<br>";
+                }
+                console.log(res);
+                $('#main').append(res);
+            }
+        });
+    }
+})
+
+</script>
+</body>
+</html>
